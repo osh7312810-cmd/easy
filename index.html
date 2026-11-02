@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>법인카드 집근처 분석</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#fff; --line:#e3e6ea; --text:#1d2330; --sub:#667085;
+  --primary:#2f6fed; --primary-weak:#e8f0fe;
+  --high:#d92d20; --high-weak:#fde8e7; --warn:#e8890c; --warn-weak:#fff3e0;
+  --ok:#12a150; --ok-weak:#e6f6ec; --mute:#98a2b3; --mute-weak:#f0f2f5;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Pretendard","Malgun Gothic",system-ui,sans-serif}
+header{background:#1d2330;color:#fff;padding:0 20px;display:flex;align-items:center;gap:24px;height:56px;position:sticky;top:0;z-index:20}
+header h1{font-size:17px;margin:0;font-weight:700;white-space:nowrap}
+nav{display:flex;gap:4px}
+nav button{background:none;border:0;color:#c5cad3;padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit;white-space:nowrap}
+@media (max-width:760px){header{height:auto;flex-wrap:wrap;gap:6px 16px;padding:10px 16px} nav{flex-wrap:wrap} #sdkState{margin-left:0}}
+nav button.active{background:#ffffff1f;color:#fff;font-weight:600}
+#sdkState{margin-left:auto;font-size:12px;color:#c5cad3;white-space:nowrap}
+main{padding:20px;max-width:1500px;margin:0 auto}
+.tab{display:none}.tab.active{display:block}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.panel h2{font-size:15px;margin:0 0 12px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.muted{color:var(--sub);font-size:13px}
+button.btn{border:1px solid var(--line);background:#fff;padding:7px 14px;border-radius:6px;cursor:pointer;font:inherit}
+button.btn:hover{background:#f7f8fa}
+button.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+button.btn.primary:hover{filter:brightness(.95)}
+button.btn:disabled{opacity:.5;cursor:not-allowed}
+input[type=text],input[type=number],select,textarea{border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;background:#fff;color:inherit}
+textarea{width:100%;min-height:90px}
+label.chk{display:inline-flex;gap:6px;align-items:center}
+.drop{border:2px dashed #c7ccd4;border-radius:10px;padding:22px;text-align:center;color:var(--sub);cursor:pointer;background:#fafbfc}
+.drop.over{border-color:var(--primary);background:var(--primary-weak)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.kpi .l{color:var(--sub);font-size:12px}
+.kpi .v{font-size:22px;font-weight:700;margin-top:2px}
+.kpi .s{font-size:12px;color:var(--sub)}
+.kpi.high .v{color:var(--high)} .kpi.warn .v{color:var(--warn)}
+.grid2{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px}
+@media (max-width:1000px){.grid2{grid-template-columns:1fr}}
+#map{width:100%;height:520px;border-radius:8px;background:#eef0f3;display:flex;align-items:center;justify-content:center;color:var(--sub)}
+.tbl-wrap{overflow:auto;max-height:560px;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{background:#f7f8fa;position:sticky;top:0;z-index:1;font-weight:600;color:#475467}
+td.num,th.num{text-align:right}
+tbody tr:hover{background:#f7f9ff;cursor:pointer}
+tr.sel{background:var(--primary-weak)!important}
+.badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600}
+.b-high{background:var(--high-weak);color:var(--high)}
+.b-warn{background:var(--warn-weak);color:var(--warn)}
+.b-ok{background:var(--ok-weak);color:var(--ok)}
+.b-mute{background:var(--mute-weak);color:#667085}
+.flag{display:inline-block;font-size:11px;padding:0 6px;border-radius:4px;background:#eef1f6;color:#475467;margin-right:3px}
+.progress{height:6px;background:#eceff3;border-radius:3px;overflow:hidden;flex:1;min-width:160px}
+.progress>div{height:100%;width:0;background:var(--primary);transition:width .2s}
+.dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #0004;cursor:pointer}
+.home-pin{background:#1d2330;color:#fff;font-size:12px;font-weight:700;padding:3px 8px;border-radius:12px;box-shadow:0 1px 4px #0005;white-space:nowrap}
+.iw{background:#fff;border:1px solid #ccd;border-radius:8px;padding:10px 12px;font-size:12px;box-shadow:0 2px 8px #0003;min-width:200px;max-width:300px;white-space:normal;position:relative;bottom:12px}
+.iw b{font-size:13px}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--sub);margin-top:8px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.help{background:#f7f9ff;border:1px solid #d6e2fb;border-radius:8px;padding:12px 14px;font-size:13px}
+.help ol{margin:6px 0 0 18px;padding:0}
+code{background:#eef1f6;padding:1px 5px;border-radius:4px}
+.report{max-width:900px;margin:0 auto;font-size:14.5px;line-height:1.75}
+.report h1{font-size:22px;border-bottom:2px solid #1d2330;padding-bottom:8px;margin:0 0 6px}
+.report h2{font-size:17px;margin:26px 0 8px;padding-left:8px;border-left:4px solid var(--primary)}
+.report h3{font-size:15px;margin:18px 0 6px}
+.report table{margin:8px 0 14px;font-size:13px}
+.report th,.report td{border:1px solid var(--line);white-space:normal}
+.report .meta{color:var(--sub);font-size:13px;margin-bottom:14px}
+.report .kgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+.report .kgrid div{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.report .kgrid b{display:block;font-size:18px}
+.report .note{font-size:12px;color:var(--sub);border-top:1px solid var(--line);margin-top:24px;padding-top:8px}
+@media print{
+  header,nav,.tab:not(#tab-ai),#tab-ai>.panel:first-child{display:none!important}
+  body{background:#fff} main{padding:0} .panel{border:0;padding:0}
+  .report{max-width:none}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>법인카드 집근처 사용 분석</h1>
+  <nav>
+    <button data-tab="dash" class="active">대시보드</button>
+    <button data-tab="ai">AI 보고서</button>
+    <button data-tab="emp">직원 집주소</button>
+    <button data-tab="set">설정</button>
+  </nav>
+  <span id="sdkState">카카오 지도: 미연결</span>
+</header>
+
+<main>
+<!-- ========== 대시보드 ========== -->
+<section id="tab-dash" class="tab active">
+  <div class="panel">
+    <h2>1. 법인카드 사용내역 업로드</h2>
+    <div id="drop" class="drop">엑셀(.xlsx/.xls) 또는 CSV 파일을 끌어다 놓거나 클릭해서 선택하세요<br>
+      <span class="muted">필수 컬럼: 이용자명, 이용일, 가맹점명, 이용금액, 가맹점 주소 (나머지 컬럼은 있으면 함께 표시)</span></div>
+    <input id="file" type="file" accept=".xlsx,.xls,.csv" multiple hidden>
+    <div class="row" style="margin-top:12px">
+      <span id="fileInfo" class="muted">불러온 파일 없음</span>
+      <button id="btnAnalyze" class="btn primary" disabled>2. 집근처 분석 실행</button>
+      <div class="progress"><div id="prog"></div></div>
+      <span id="progText" class="muted"></span>
+    </div>
+  </div>
+
+  <div id="kpis" class="kpis"></div>
+
+  <div class="grid2">
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <h2 style="margin:0">지도</h2>
+        <div class="row">
+          <select id="mapUser"><option value="">이용자 선택</option></select>
+        </div>
+      </div>
+      <div id="map">설정 탭에서 카카오 JavaScript 키를 입력하세요</div>
+      <div class="legend">
+        <span><i style="background:var(--high)"></i>고위험</span>
+        <span><i style="background:var(--warn)"></i>주의</span>
+        <span><i style="background:var(--ok)"></i>정상</span>
+        <span>실선 원: 집근처 반경 · 점선 원: 인접 반경(2배)</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>이용자별 요약</h2>
+      <div class="tbl-wrap" style="max-height:520px">
+        <table id="userTbl"><thead><tr>
+          <th>이용자</th><th class="num">분석건수</th><th class="num">총금액</th>
+          <th class="num">집근처 건수</th><th class="num">집근처 금액</th><th class="num">비율</th><th class="num">고위험</th>
+        </tr></thead><tbody><tr><td colspan="7" class="muted">분석 결과가 없습니다</td></tr></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <h2 style="margin:0">거래 상세</h2>
+      <div class="row">
+        <select id="fUser"><option value="">전체 이용자</option></select>
+        <select id="fJudge">
+          <option value="">전체 판정</option>
+          <option value="고위험">고위험</option><option value="주의">주의</option>
+          <option value="정상">정상</option><option value="제외">제외</option><option value="확인불가">확인불가</option>
+        </select>
+        <input id="fText" type="text" placeholder="가맹점·주소·업종 검색" style="width:200px">
+        <button id="btnExport" class="btn" disabled>결과 엑셀 다운로드</button>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table id="txTbl"><thead><tr>
+        <th>판정</th><th>이용일</th><th>시간</th><th>이용자</th><th>가맹점명</th><th>업종</th>
+        <th class="num">이용금액</th><th class="num">집과 거리</th><th>사유</th><th>가맹점 주소</th><th>좌표 기준</th>
+      </tr></thead><tbody><tr><td colspan="11" class="muted">분석 결과가 없습니다</td></tr></tbody></table>
+    </div>
+    <div id="txCount" class="muted" style="margin-top:6px"></div>
+  </div>
+</section>
+
+<!-- ========== AI 보고서 ========== -->
+<section id="tab-ai" class="tab">
+  <div class="panel">
+    <h2>AI 이상징후 요약 · 경영진 보고서</h2>
+    <p class="muted" style="margin-top:0">대시보드에서 <b>집근처 분석 실행</b>을 마친 뒤 사용하세요. 숫자(건수·금액)는 이 화면에서 직접 계산해 넣고, Gemini는 해석·문장 작성만 맡습니다.</p>
+    <div class="row" style="margin-bottom:10px">
+      <label>대상 <select id="aiUser"><option value="">전체 이용자</option></select></label>
+      <label>보고 부서 <input id="rptDept" type="text" placeholder="예: 재무팀" style="width:130px"></label>
+      <label>작성자 <input id="rptAuthor" type="text" placeholder="예: 홍길동 과장" style="width:130px"></label>
+    </div>
+    <div class="row">
+      <button id="btnAiSummary" class="btn primary">이상징후 요약 생성</button>
+      <button id="btnAiReport" class="btn primary">경영진 보고서 작성</button>
+      <span id="aiState" class="muted"></span>
+      <span style="flex:1"></span>
+      <button id="btnRptCopy" class="btn" disabled>복사</button>
+      <button id="btnRptWord" class="btn" disabled>Word 저장</button>
+      <button id="btnRptHtml" class="btn" disabled>HTML 저장</button>
+      <button id="btnRptPrint" class="btn" disabled>인쇄 / PDF</button>
+    </div>
+  </div>
+  <div class="panel">
+    <div id="aiOut" class="report"><p class="muted">아직 생성된 결과가 없습니다.</p></div>
+  </div>
+</section>
+
+<!-- ========== 직원 집주소 ========== -->
+<section id="tab-emp" class="tab">
+  <div class="panel">
+    <h2>직원 집주소 관리</h2>
+    <p class="muted" style="margin-top:0">사용내역을 업로드하면 이용자명이 자동으로 추가됩니다. 집주소를 입력하고 <b>좌표 확인</b>을 누르세요.
+      집주소는 이 브라우저(localStorage)에만 저장되며 서버로 업로드되지 않습니다(주소→좌표 변환만 카카오 API 사용).</p>
+    <div class="row" style="margin-bottom:12px">
+      <input id="newEmpName" type="text" placeholder="이용자명" style="width:120px">
+      <input id="newEmpAddr" type="text" placeholder="집주소 (도로명 또는 지번)" style="width:340px">
+      <button id="btnAddEmp" class="btn">추가</button>
+      <span style="flex:1"></span>
+      <button id="btnGeoAllEmp" class="btn primary">전체 좌표 확인</button>
+      <button id="btnEmpTpl" class="btn">엑셀 내보내기/양식</button>
+      <button id="btnEmpImport" class="btn">엑셀 일괄등록</button>
+      <input id="empFile" type="file" accept=".xlsx,.xls,.csv" hidden>
+    </div>
+    <div class="tbl-wrap">
+      <table id="empTbl"><thead><tr>
+        <th>이용자명</th><th style="width:40%">집주소</th><th class="num">개별 반경(m)</th><th>좌표 상태</th><th></th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+    <p class="muted">일괄등록 엑셀 컬럼: <code>이용자명</code>, <code>집주소</code>, (선택) <code>반경</code>. 개별 반경을 비우면 설정 탭의 기본 반경을 씁니다.</p>
+  </div>
+</section>
+
+<!-- ========== 설정 ========== -->
+<section id="tab-set" class="tab">
+  <div class="panel">
+    <h2>카카오 지도 연결</h2>
+    <div class="row">
+      <input id="kakaoKey" type="text" placeholder="카카오 JavaScript 키" style="width:360px">
+      <button id="btnSaveKey" class="btn primary">저장 후 연결</button>
+    </div>
+    <div class="help" style="margin-top:12px">
+      <b>카카오 키 발급 방법</b>
+      <ol>
+        <li><a href="https://developers.kakao.com" target="_blank">developers.kakao.com</a> → 내 애플리케이션 → 애플리케이션 추가</li>
+        <li>앱 → 플랫폼 키 → JavaScript 키 → <b>JavaScript SDK 도메인</b>에 접속 주소 등록
+          (웹: <code>https://osh7312810-cmd.github.io</code>, 내 PC: <code>http://localhost:8080</code>)</li>
+        <li>(메뉴가 있으면) <b>카카오맵</b> 사용 설정 ON</li>
+        <li><b>JavaScript 키</b>를 복사해 위에 입력</li>
+      </ol>
+      내 PC에서 쓸 때는 파일을 더블클릭(file://)하지 말고 <code>실행.bat</code>으로 열어주세요.
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Gemini AI 연결 (이상징후 요약 · 경영진 보고서)</h2>
+    <div class="row">
+      <input id="geminiKey" type="password" placeholder="Gemini API 키" style="width:360px" autocomplete="off">
+      <input id="geminiModel" type="text" list="geminiModels" placeholder="모델" style="width:220px">
+      <datalist id="geminiModels"><option value="gemini-3.5-flash"><option value="gemini-flash-latest"><option value="gemini-flash-lite-latest"><option value="gemini-pro-latest"></datalist>
+      <button id="btnSaveGemini" class="btn primary">저장 후 연결 테스트</button>
+      <button id="btnListModels" class="btn">모델 목록 불러오기</button>
+    </div>
+    <div id="geminiState" class="muted" style="margin-top:8px;font-weight:600"></div>
+    <p class="muted" style="margin:4px 0 0">선택한 모델이 혼잡하거나 종료된 경우 gemini-3.5-flash → flash-latest → flash-lite 순으로 자동 전환합니다.</p>
+    <div class="help" style="margin-top:12px">
+      <b>Gemini 키 발급</b>: <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio → Get API key</a> → API 키 만들기 → 복사해서 위에 입력.<br>
+      키는 이 브라우저에만 저장됩니다. AI 기능을 쓸 때 <b>분석 결과 요약 통계와 의심 거래 목록</b>(가맹점명·업종·금액·일시·거리)이 Google로 전송됩니다.
+      카드번호·사업자번호·집주소는 보내지 않으며, 아래 옵션을 켜면 이용자명도 <code>직원01</code> 형태로 바꿔 보냅니다(결과 화면에서는 실명으로 복원).
+      <div style="margin-top:6px"><label class="chk"><input id="aiMask" type="checkbox"> 이용자명 가명 처리 후 전송</label></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>판정 기준</h2>
+    <div class="row" style="margin-bottom:10px">
+      <label>집근처 기본 반경 <input id="radius" type="number" min="100" step="100" style="width:100px"> m</label>
+      <span class="muted">· 인접 = 반경의 2배</span>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <label>심야 시간 <input id="nightStart" type="number" min="0" max="23" style="width:70px"> 시 ~ <input id="nightEnd" type="number" min="0" max="23" style="width:70px"> 시</label>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <label class="chk"><input id="exOnline" type="checkbox"> 온라인/PG 결제 제외 (주소가 PG사 본사인 거래)</label>
+      <label class="chk"><input id="exForeign" type="checkbox"> 해외 결제 제외</label>
+    </div>
+    <p class="muted" style="margin:0 0 4px">판정 규칙 — <b>고위험</b>: 집근처 + (주말·공휴일 또는 심야) / <b>주의</b>: 집근처(평일 주간) 또는 인접 + (주말·공휴일 또는 심야) / <b>정상</b>: 그 외</p>
+    <div style="margin-top:12px">
+      <div class="muted">공휴일 목록 (YYYY-MM-DD, 줄바꿈 또는 쉼표로 구분)</div>
+      <textarea id="holidays"></textarea>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="btnSaveSet" class="btn primary">설정 저장</button>
+      <button id="btnClearCache" class="btn">가맹점 좌표 캐시 초기화</button>
+      <span id="cacheInfo" class="muted"></span>
+    </div>
+  </div>
+</section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
